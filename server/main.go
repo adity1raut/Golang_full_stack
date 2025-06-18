@@ -3,50 +3,78 @@ package main
 import (
 	"log"
 	"net/http"
-	"github.com/gorilla/mux"
+	"os"
+
+	"server/auth"
+	"server/database"
+	"server/handlers"
+	"server/models"
+
 	"github.com/gorilla/handlers"
+	"github.com/gorilla/mux"
 )
 
 func main() {
 	// Initialize database
-	if err := InitDB(); err != nil {
-		log.Fatal("Failed to initialize database:", err)
-	}
-	defer DB.Close()
+	database.InitDB()
+	defer database.DB.Close()
 
-	// Create router
-	r := mux.NewRouter()
+	// Create handlers instance
+	appHandlers := handlers.NewHandlers(database.DB)
 
-	// Add CORS middleware
-	corsMiddleware := handlers.CORS(
-		handlers.AllowedOrigins([]string{"http://localhost:5173"}),
+	// Initialize router
+	router := mux.NewRouter()
+
+	// CORS configuration
+	cors := handlers.CORS(
+		handlers.AllowedOrigins([]string{os.Getenv("ALLOWED_ORIGINS")}),
 		handlers.AllowedMethods([]string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}),
 		handlers.AllowedHeaders([]string{"Content-Type", "Authorization"}),
+		handlers.AllowCredentials(),
 	)
 
+	// API routes
+	api := router.PathPrefix("/api").Subrouter()
+
 	// Authentication routes
-	r.HandleFunc("/register", RegisterHandler).Methods("POST")
-	r.HandleFunc("/login", LoginHandler).Methods("POST")
-	r.HandleFunc("/logout", AuthMiddleware(LogoutHandler)).Methods("POST")
+	api.HandleFunc("/register", appHandlers.RegisterHandler).Methods("POST")
+	api.HandleFunc("/login", appHandlers.LoginHandler).Methods("POST")
+	api.HandleFunc("/logout", auth.AuthMiddleware(database.DB, appHandlers.LogoutHandler)).Methods("POST")
 
 	// Profile routes
-	r.HandleFunc("/profile", AuthMiddleware(GetProfileHandler)).Methods("GET")
-	r.HandleFunc("/profile", AuthMiddleware(UpdateProfileHandler)).Methods("PUT")
-	r.HandleFunc("/profile/password", AuthMiddleware(ChangePasswordHandler)).Methods("PUT")
+	api.HandleFunc("/profile", auth.AuthMiddleware(database.DB, appHandlers.GetProfileHandler)).Methods("GET")
+	api.HandleFunc("/profile", auth.AuthMiddleware(database.DB, appHandlers.UpdateProfileHandler)).Methods("PUT")
 
 	// Todo routes
-	r.HandleFunc("/todos", AuthMiddleware(GetTodosHandler)).Methods("GET")
-	r.HandleFunc("/todos", AuthMiddleware(CreateTodoHandler)).Methods("POST")
-	r.HandleFunc("/todos/{id}", AuthMiddleware(GetTodoHandler)).Methods("GET")
-	r.HandleFunc("/todos/{id}", AuthMiddleware(UpdateTodoHandler)).Methods("PUT")
-	r.HandleFunc("/todos/{id}", AuthMiddleware(DeleteTodoHandler)).Methods("DELETE")
+	api.HandleFunc("/todos", auth.AuthMiddleware(database.DB, appHandlers.GetTodosHandler)).Methods("GET")
+	api.HandleFunc("/todos", auth.AuthMiddleware(database.DB, appHandlers.CreateTodoHandler)).Methods("POST")
+	api.HandleFunc("/todos/{id:[0-9]+}", auth.AuthMiddleware(database.DB, appHandlers.UpdateTodoHandler)).Methods("PUT")
+	api.HandleFunc("/todos/{id:[0-9]+}", auth.AuthMiddleware(database.DB, appHandlers.DeleteTodoHandler)).Methods("DELETE")
 
 	// Health check
-	r.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
-	}).Methods("GET")
+	router.HandleFunc("/health", appHandlers.HealthCheckHandler).Methods("GET")
 
-	log.Println("Server is running on port 8080")
-	log.Fatal(http.ListenAndServe(":8080", corsMiddleware(r)))
+	// Serve Swagger docs if enabled
+	if os.Getenv("ENABLE_SWAGGER") == "true" {
+		router.PathPrefix("/docs").Handler(http.StripPrefix("/docs", http.FileServer(http.Dir("./swagger"))))
+		log.Println("Swagger docs available at /docs")
+	}
+
+	// Logger middleware
+	loggedRouter := handlers.LoggingHandler(os.Stdout, router)
+
+	// Server configuration
+	server := &http.Server{
+		Addr:         ":" + os.Getenv("PORT"),
+		Handler:      cors(loggedRouter),
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+
+	// Start server
+	log.Printf("Server starting on %s", server.Addr)
+	if err := server.ListenAndServe(); err != nil {
+		log.Fatalf("Server failed to start: %v", err)
+	}
 }

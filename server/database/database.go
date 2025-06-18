@@ -1,25 +1,25 @@
-package main
+package database
 
 import (
 	"database/sql"
+	"log"
 	_ "modernc.org/sqlite"
 )
 
 var DB *sql.DB
 
-func InitDB() error {
+func InitDB() {
 	var err error
 	DB, err = sql.Open("sqlite", "./todos.db")
 	if err != nil {
-		return err
+		log.Fatal(err)
 	}
 
-	// Enable foreign keys
-	if _, err = DB.Exec("PRAGMA foreign_keys = ON"); err != nil {
-		return err
+	_, err = DB.Exec("PRAGMA foreign_keys = ON")
+	if err != nil {
+		log.Fatal(err)
 	}
 
-	// Create tables
 	queries := []string{
 		`CREATE TABLE IF NOT EXISTS users (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -27,6 +27,7 @@ func InitDB() error {
 			password TEXT NOT NULL,
 			email TEXT NOT NULL UNIQUE,
 			name TEXT,
+			bio TEXT,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		);`,
 		`CREATE TABLE IF NOT EXISTS todos (
@@ -48,10 +49,9 @@ func InitDB() error {
 	}
 
 	for _, query := range queries {
-		if _, err = DB.Exec(query); err != nil {
-			return err
+		_, err = DB.Exec(query)
+		if err != nil {
+			log.Fatal(err)
 		}
 	}
-
-	return nil
 }
