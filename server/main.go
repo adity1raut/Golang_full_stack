@@ -4,13 +4,13 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"server/auth"
 	"server/database"
-	"server/handlers"
-	"server/models"
+	myhandlers "server/handlers" // Renamed local handlers package
 
-	"github.com/gorilla/handlers"
+	gorillaHandlers "github.com/gorilla/handlers" // Renamed gorilla handlers
 	"github.com/gorilla/mux"
 )
 
@@ -20,17 +20,17 @@ func main() {
 	defer database.DB.Close()
 
 	// Create handlers instance
-	appHandlers := handlers.NewHandlers(database.DB)
+	appHandlers := myhandlers.NewHandlers(database.DB)
 
 	// Initialize router
 	router := mux.NewRouter()
 
 	// CORS configuration
-	cors := handlers.CORS(
-		handlers.AllowedOrigins([]string{os.Getenv("ALLOWED_ORIGINS")}),
-		handlers.AllowedMethods([]string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}),
-		handlers.AllowedHeaders([]string{"Content-Type", "Authorization"}),
-		handlers.AllowCredentials(),
+	cors := gorillaHandlers.CORS(
+		gorillaHandlers.AllowedOrigins([]string{os.Getenv("ALLOWED_ORIGINS")}),
+		gorillaHandlers.AllowedMethods([]string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}),
+		gorillaHandlers.AllowedHeaders([]string{"Content-Type", "Authorization"}),
+		gorillaHandlers.AllowCredentials(),
 	)
 
 	// API routes
@@ -54,14 +54,8 @@ func main() {
 	// Health check
 	router.HandleFunc("/health", appHandlers.HealthCheckHandler).Methods("GET")
 
-	// Serve Swagger docs if enabled
-	if os.Getenv("ENABLE_SWAGGER") == "true" {
-		router.PathPrefix("/docs").Handler(http.StripPrefix("/docs", http.FileServer(http.Dir("./swagger"))))
-		log.Println("Swagger docs available at /docs")
-	}
-
 	// Logger middleware
-	loggedRouter := handlers.LoggingHandler(os.Stdout, router)
+	loggedRouter := gorillaHandlers.LoggingHandler(os.Stdout, router)
 
 	// Server configuration
 	server := &http.Server{

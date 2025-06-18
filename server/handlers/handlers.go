@@ -261,19 +261,16 @@ func (h *Handlers) GetTodosHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
-	var todos []struct {
+	type Todo struct {
 		ID        int       `json:"id"`
 		Task      string    `json:"task"`
 		Status    bool      `json:"status"`
 		CreatedAt time.Time `json:"created_at"`
 	}
+	var todos []Todo
+
 	for rows.Next() {
-		var todo struct {
-			ID        int
-			Task      string
-			Status    bool
-			CreatedAt time.Time
-		}
+		var todo Todo
 		if err := rows.Scan(&todo.ID, &todo.Task, &todo.Status, &todo.CreatedAt); err != nil {
 			http.Error(w, "Failed to read todos", http.StatusInternalServerError)
 			return
@@ -282,12 +279,7 @@ func (h *Handlers) GetTodosHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if todos == nil {
-		todos = []struct {
-			ID        int       `json:"id"`
-			Task      string    `json:"task"`
-			Status    bool      `json:"status"`
-			CreatedAt time.Time `json:"created_at"`
-		}{}
+		todos = []Todo{}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
