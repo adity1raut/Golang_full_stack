@@ -1,147 +1,84 @@
-import { useState, useEffect } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../hooks/useAuth';
-import { validateLoginForm } from '../utils/validators';
-import { AuthLayout } from '../components/auth/AuthLayout';
-import { LoginForm } from '../components/auth/LoginForm';
-import { Alert } from '../components/ui/Alert';
-import { ROUTES } from '../utils/constants';
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { login } from '../api/auth';
 
-export const Login = () => {
-  const [formData, setFormData] = useState({
-    email: '',
-    password: ''
+const Login = () => {
+  const [credentials, setCredentials] = useState({
+    username: '',
+    password: '',
   });
-  const [errors, setErrors] = useState({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [serverError, setServerError] = useState('');
-
-  const { login, user } = useAuth();
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
   const navigate = useNavigate();
-  const location = useLocation();
-
-  const from = location.state?.from?.pathname || ROUTES.DASHBOARD;
-
-  useEffect(() => {
-    if (user) {
-      navigate(from, { replace: true });
-    }
-  }, [user, navigate, from]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-
-    // Clear field error when user starts typing
-    if (errors[name]) {
-      setErrors(prev => ({
-        ...prev,
-        [name]: ''
-      }));
-    }
-
-    // Clear server error
-    if (serverError) {
-      setServerError('');
-    }
+    setCredentials((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    const validation = validateLoginForm(formData);
-    setErrors(validation.errors);
-    
-    if (!validation.isValid) {
-      return;
-    }
-
-    setIsSubmitting(true);
-    setServerError('');
+    setIsLoading(true);
+    setError('');
 
     try {
-      await login(formData.email, formData.password);
-      // Navigation will be handled by useEffect when user state updates
-    } catch (error) {
-      setServerError(error.message || 'Login failed. Please try again.');
+      await login(credentials);
+      navigate('/todos');
+    } catch (err) {
+      setError(err.message);
     } finally {
-      setIsSubmitting(false);
+      setIsLoading(false);
     }
   };
 
   return (
-    <AuthLayout
-      title="Sign in to your account"
-      subtitle="Welcome back! Please enter your details."
-    >
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {serverError && (
-          <Alert type="error" message={serverError} />
-        )}
-
-        <LoginForm
-          formData={formData}
-          errors={errors}
-          onChange={handleChange}
-          isSubmitting={isSubmitting}
-        />
-
-        <div className="flex items-center justify-between">
-          <div className="flex items-center">
-            <input
-              id="remember-me"
-              name="remember-me"
-              type="checkbox"
-              className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-            />
-            <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-900">
-              Remember me
-            </label>
-          </div>
-
-          <div className="text-sm">
-            <Link
-              to="/forgot-password"
-              className="font-medium text-primary-600 hover:text-primary-500"
-            >
-              Forgot your password?
-            </Link>
-          </div>
+    <div className="max-w-md mx-auto bg-white p-8 rounded-lg shadow-md">
+      <h2 className="text-2xl font-bold text-center mb-6">Login</h2>
+      {error && <div className="mb-4 p-2 bg-red-100 text-red-700 rounded">{error}</div>}
+      <form onSubmit={handleSubmit}>
+        <div className="mb-4">
+          <label htmlFor="username" className="block text-gray-700 mb-2">
+            Username
+          </label>
+          <input
+            type="text"
+            id="username"
+            name="username"
+            value={credentials.username}
+            onChange={handleChange}
+            required
+            className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+          />
         </div>
-
-        <div>
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isSubmitting ? (
-              <div className="flex items-center">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                Signing in...
-              </div>
-            ) : (
-              'Sign in'
-            )}
-          </button>
+        <div className="mb-6">
+          <label htmlFor="password" className="block text-gray-700 mb-2">
+            Password
+          </label>
+          <input
+            type="password"
+            id="password"
+            name="password"
+            value={credentials.password}
+            onChange={handleChange}
+            required
+            className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+          />
         </div>
-
-        <div className="text-center">
-          <p className="text-sm text-gray-600">
-            Don't have an account?{' '}
-            <Link
-              to={ROUTES.REGISTER}
-              className="font-medium text-primary-600 hover:text-primary-500"
-            >
-              Sign up
-            </Link>
-          </p>
-        </div>
+        <button
+          type="submit"
+          disabled={isLoading}
+          className="w-full bg-primary-600 text-white py-2 px-4 rounded-lg hover:bg-primary-700 disabled:opacity-50"
+        >
+          {isLoading ? 'Logging in...' : 'Login'}
+        </button>
       </form>
-    </AuthLayout>
+      <p className="mt-4 text-center text-gray-600">
+        Don't have an account?{' '}
+        <a href="/register" className="text-primary-600 hover:underline">
+          Register
+        </a>
+      </p>
+    </div>
   );
 };
 

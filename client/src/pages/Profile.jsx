@@ -1,390 +1,158 @@
-import { useState, useEffect } from 'react';
-import { useAuth } from '../hooks/useAuth';
-import { useApi } from '../hooks/useApi';
-import { validateProfileForm } from '../utils/validators';
-import { Layout } from '../components/layout/Layout';
-import { ProfileView } from '../components/profile/ProfileView';
-import { ProfileEdit } from '../components/profile/ProfileEdit';
-import { LoadingSpinner } from '../components/common/LoadingSpinner';
-import { ErrorMessage } from '../components/common/ErrorMessage';
-import { Alert } from '../components/ui/Alert';
-import { Button } from '../components/ui/Button';
-import { Modal } from '../components/ui/Modal';
-import { ConfirmDialog } from '../components/common/ConfirmDialog';
-import { Edit, Save, X, Trash2, Shield } from 'lucide-react';
-import { authService } from '../services/auth';
+import { useEffect, useState } from 'react';
+import { getProfile, updateProfile } from '../api/profile';
 
-export const Profile = () => {
-  const { user, updateProfile, logout } = useAuth();
-  const { loading, error, execute } = useApi();
-  
-  const [isEditing, setIsEditing] = useState(false);
+const Profile = () => {
+  const [profile, setProfile] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [editMode, setEditMode] = useState(false);
   const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
-    email: ''
+    name: '',
+    bio: '',
   });
-  const [errors, setErrors] = useState({});
-  const [successMessage, setSuccessMessage] = useState('');
-  const [showChangePassword, setShowChangePassword] = useState(false);
-  const [showDeleteAccount, setShowDeleteAccount] = useState(false);
-  const [passwordData, setPasswordData] = useState({
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: ''
-  });
-  const [passwordErrors, setPasswordErrors] = useState({});
 
   useEffect(() => {
-    if (user) {
-      setFormData({
-        firstName: user.firstName || '',
-        lastName: user.lastName || '',
-        email: user.email || ''
-      });
-    }
-  }, [user]);
+    const fetchProfile = async () => {
+      setIsLoading(true);
+      setError('');
 
-  useEffect(() => {
-    if (successMessage) {
-      const timer = setTimeout(() => setSuccessMessage(''), 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [successMessage]);
+      try {
+        const data = await getProfile();
+        setProfile(data);
+        setFormData({
+          name: data.name || '',
+          bio: data.bio || '',
+        });
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-  const handleInputChange = (e) => {
+    fetchProfile();
+  }, []);
+
+  const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-
-    // Clear field error when user starts typing
-    if (errors[name]) {
-      setErrors(prev => ({
-        ...prev,
-        [name]: ''
-      }));
-    }
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handlePasswordChange = (e) => {
-    const { name, value } = e.target;
-    setPasswordData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-
-    // Clear field error when user starts typing
-    if (passwordErrors[name]) {
-      setPasswordErrors(prev => ({
-        ...prev,
-        [name]: ''
-      }));
-    }
-  };
-
-  const handleSave = async () => {
-    const validation = validateProfileForm(formData);
-    setErrors(validation.errors);
-    
-    if (!validation.isValid) {
-      return;
-    }
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError('');
 
     try {
-      await execute(updateProfile, formData);
-      setIsEditing(false);
-      setSuccessMessage('Profile updated successfully!');
+      const updatedProfile = await updateProfile(formData);
+      setProfile(updatedProfile);
+      setEditMode(false);
     } catch (err) {
-      console.error('Failed to update profile:', err);
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleCancel = () => {
-    setIsEditing(false);
-    setErrors({});
-    // Reset form data to original user data
-    if (user) {
-      setFormData({
-        firstName: user.firstName || '',
-        lastName: user.lastName || '',
-        email: user.email || ''
-      });
-    }
-  };
+  if (isLoading && !profile) {
+    return <div className="text-center py-8">Loading profile...</div>;
+  }
 
-  const handleChangePassword = async () => {
-    const newErrors = {};
-
-    if (!passwordData.currentPassword) {
-      newErrors.currentPassword = 'Current password is required';
-    }
-
-    if (!passwordData.newPassword) {
-      newErrors.newPassword = 'New password is required';
-    } else if (passwordData.newPassword.length < 6) {
-      newErrors.newPassword = 'Password must be at least 6 characters long';
-    }
-
-    if (!passwordData.confirmPassword) {
-      newErrors.confirmPassword = 'Please confirm your new password';
-    } else if (passwordData.newPassword !== passwordData.confirmPassword) {
-      newErrors.confirmPassword = 'Passwords do not match';
-    }
-
-    setPasswordErrors(newErrors);
-
-    if (Object.keys(newErrors).length > 0) {
-      return;
-    }
-
-    try {
-      await execute(authService.changePassword, {
-        currentPassword: passwordData.currentPassword,
-        newPassword: passwordData.newPassword
-      });
-      
-      setShowChangePassword(false);
-      setPasswordData({
-        currentPassword: '',
-        newPassword: '',
-        confirmPassword: ''
-      });
-      setPasswordErrors({});
-      setSuccessMessage('Password changed successfully!');
-    } catch (err) {
-      setPasswordErrors({
-        currentPassword: err.message || 'Failed to change password'
-      });
-    }
-  };
-
-  const handleDeleteAccount = async () => {
-    try {
-      await execute(authService.deleteAccount);
-      setSuccessMessage('Account deleted successfully. Logging out...');
-      setTimeout(() => {
-        logout();
-      }, 2000);
-    } catch (err) {
-      console.error('Failed to delete account:', err);
-    }
-  };
-
-  if (!user) {
-    return (
-      <Layout>
-        <div className="flex justify-center items-center h-64">
-          <LoadingSpinner size="lg" />
-        </div>
-      </Layout>
-    );
+  if (error && !profile) {
+    return <div className="text-center py-8 text-red-500">{error}</div>;
   }
 
   return (
-    <Layout>
-      <div className="max-w-4xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="bg-white shadow rounded-lg p-6">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Profile Settings</h1>
-              <p className="mt-1 text-sm text-gray-500">
-                Manage your account settings and preferences.
-              </p>
-            </div>
-            <div className="mt-4 sm:mt-0 flex gap-2">
-              {isEditing ? (
-                <>
-                  <Button
-                    variant="outline"
-                    onClick={handleCancel}
-                    disabled={loading}
-                  >
-                    <X className="h-4 w-4 mr-2" />
-                    Cancel
-                  </Button>
-                  <Button
-                    onClick={handleSave}
-                    disabled={loading}
-                  >
-                    {loading ? (
-                      <div className="flex items-center">
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                        Saving...
-                      </div>
-                    ) : (
-                      <>
-                        <Save className="h-4 w-4 mr-2" />
-                        Save Changes
-                      </>
-                    )}
-                  </Button>
-                </>
-              ) : (
-                <Button onClick={() => setIsEditing(true)}>
-                  <Edit className="h-4 w-4 mr-2" />
-                  Edit Profile
-                </Button>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Success Message */}
-        {successMessage && (
-          <Alert type="success" message={successMessage} />
+    <div className="max-w-2xl mx-auto bg-white p-6 rounded-lg shadow-md">
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-2xl font-bold">Profile</h2>
+        {!editMode && (
+          <button
+            onClick={() => setEditMode(true)}
+            className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+          >
+            Edit Profile
+          </button>
         )}
-
-        {/* Error Message */}
-        {error && (
-          <ErrorMessage message={error} />
-        )}
-
-        {/* Profile Information */}
-        <div className="bg-white shadow rounded-lg">
-          {isEditing ? (
-            <ProfileEdit
-              formData={formData}
-              errors={errors}
-              onChange={handleInputChange}
-              loading={loading}
-            />
-          ) : (
-            <ProfileView user={user} />
-          )}
-        </div>
-
-        {/* Security Settings */}
-        <div className="bg-white shadow rounded-lg p-6">
-          <h2 className="text-lg font-medium text-gray-900 mb-4">Security Settings</h2>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-medium text-gray-900">Password</h3>
-                <p className="text-sm text-gray-500">
-                  Change your account password
-                </p>
-              </div>
-              <Button
-                variant="outline"
-                onClick={() => setShowChangePassword(true)}
-              >
-                <Shield className="h-4 w-4 mr-2" />
-                Change Password
-              </Button>
-            </div>
-          </div>
-        </div>
-
-        {/* Danger Zone */}
-        <div className="bg-white shadow rounded-lg p-6 border-l-4 border-red-400">
-          <h2 className="text-lg font-medium text-red-900 mb-4">Danger Zone</h2>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-medium text-red-900">Delete Account</h3>
-                <p className="text-sm text-red-700">
-                  Permanently delete your account and all associated data
-                </p>
-              </div>
-              <Button
-                variant="danger"
-                onClick={() => setShowDeleteAccount(true)}
-              >
-                <Trash2 className="h-4 w-4 mr-2" />
-                Delete Account
-              </Button>
-            </div>
-          </div>
-        </div>
-
-        {/* Change Password Modal */}
-        <Modal
-          isOpen={showChangePassword}
-          onClose={() => setShowChangePassword(false)}
-          title="Change Password"
-        >
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Current Password
-              </label>
-              <input
-                type="password"
-                name="currentPassword"
-                value={passwordData.currentPassword}
-                onChange={handlePasswordChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
-              />
-              {passwordErrors.currentPassword && (
-                <p className="mt-1 text-sm text-red-600">{passwordErrors.currentPassword}</p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                New Password
-              </label>
-              <input
-                type="password"
-                name="newPassword"
-                value={passwordData.newPassword}
-                onChange={handlePasswordChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
-              />
-              {passwordErrors.newPassword && (
-                <p className="mt-1 text-sm text-red-600">{passwordErrors.newPassword}</p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Confirm New Password
-              </label>
-              <input
-                type="password"
-                name="confirmPassword"
-                value={passwordData.confirmPassword}
-                onChange={handlePasswordChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
-              />
-              {passwordErrors.confirmPassword && (
-                <p className="mt-1 text-sm text-red-600">{passwordErrors.confirmPassword}</p>
-              )}
-            </div>
-
-            <div className="flex justify-end space-x-2 pt-4">
-              <Button
-                variant="outline"
-                onClick={() => setShowChangePassword(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleChangePassword}
-                disabled={loading}
-              >
-                {loading ? 'Changing...' : 'Change Password'}
-              </Button>
-            </div>
-          </div>
-        </Modal>
-
-        {/* Delete Account Confirmation */}
-        <ConfirmDialog
-          isOpen={showDeleteAccount}
-          onClose={() => setShowDeleteAccount(false)}
-          onConfirm={handleDeleteAccount}
-          title="Delete Account"
-          message="Are you sure you want to delete your account? This action cannot be undone and will permanently delete all your data."
-          confirmText="Delete Account"
-          type="danger"
-          loading={loading}
-        />
       </div>
-    </Layout>
+
+      {editMode ? (
+        <form onSubmit={handleSubmit}>
+          {error && <div className="mb-4 p-2 bg-red-100 text-red-700 rounded">{error}</div>}
+          <div className="mb-4">
+            <label htmlFor="name" className="block text-gray-700 mb-2">
+              Name
+            </label>
+            <input
+              type="text"
+              id="name"
+              name="name"
+              value={formData.name}
+              onChange={handleChange}
+              className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+            />
+          </div>
+          <div className="mb-4">
+            <label htmlFor="bio" className="block text-gray-700 mb-2">
+              Bio
+            </label>
+            <textarea
+              id="bio"
+              name="bio"
+              value={formData.bio}
+              onChange={handleChange}
+              rows="4"
+              className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+            />
+          </div>
+          <div className="flex justify-end space-x-3">
+            <button
+              type="button"
+              onClick={() => setEditMode(false)}
+              className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
+            >
+              {isLoading ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
+        </form>
+      ) : (
+        <div>
+          <div className="mb-4">
+            <h3 className="text-lg font-semibold text-gray-700">Username</h3>
+            <p className="text-gray-600">{profile.username}</p>
+          </div>
+          <div className="mb-4">
+            <h3 className="text-lg font-semibold text-gray-700">Email</h3>
+            <p className="text-gray-600">{profile.email}</p>
+          </div>
+          <div className="mb-4">
+            <h3 className="text-lg font-semibold text-gray-700">Name</h3>
+            <p className="text-gray-600">{profile.name || 'Not specified'}</p>
+          </div>
+          <div className="mb-4">
+            <h3 className="text-lg font-semibold text-gray-700">Bio</h3>
+            <p className="text-gray-600">{profile.bio || 'Not specified'}</p>
+          </div>
+          <div className="mb-4">
+            <h3 className="text-lg font-semibold text-gray-700">Member Since</h3>
+            <p className="text-gray-600">
+              {new Date(profile.created_at).toLocaleDateString()}
+            </p>
+          </div>
+          <div className="mb-4">
+            <h3 className="text-lg font-semibold text-gray-700">Todo Count</h3>
+            <p className="text-gray-600">{profile.todo_count}</p>
+          </div>
+        </div>
+      )}
+    </div>
   );
 };
 

@@ -1,57 +1,30 @@
-import React from 'react'
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
-import { useAuth } from './contexts/AuthContext'
-import Layout from './components/layout/Layout'
-import Login from './pages/Login'
-import Register from './pages/Register'
-import Dashboard from './pages/Dashboard'
-import Profile from './pages/Profile'
-import NotFound from './pages/NotFound'
-import LoadingSpinner from './components/common/LoadingSpinner'
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import Layout from './components/Layout';
+import Home from './pages/Home';
+import Login from './pages/Login';
+import Register from './pages/Register';
+import Profile from './pages/Profile';
+import Todos from './pages/Todos';
+import ProtectedRoute from './components/ProtectedRoute';
 
 function App() {
-  const { user, loading } = useAuth()
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <LoadingSpinner size="lg" />
-      </div>
-    )
-  }
-
   return (
-    <Router>
-      <div className="min-h-screen bg-gray-50">
-        <Routes>
-          <Route path="/login" element={
-            user ? <Navigate to="/dashboard" /> : <Login />
-          } />
-          <Route path="/register" element={
-            user ? <Navigate to="/dashboard" /> : <Register />
-          } />
-          <Route path="/" element={
-            user ? <Navigate to="/dashboard" /> : <Navigate to="/login" />
-          } />
-          <Route path="/dashboard" element={
-            user ? (
-              <Layout>
-                <Dashboard />
-              </Layout>
-            ) : <Navigate to="/login" />
-          } />
-          <Route path="/profile" element={
-            user ? (
-              <Layout>
-                <Profile />
-              </Layout>
-            ) : <Navigate to="/login" />
-          } />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </div>
-    </Router>
-  )
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Layout />}>
+          <Route index element={<Home />} />
+          <Route path="login" element={<Login />} />
+          <Route path="register" element={<Register />} />
+          
+          {/* Protected routes */}
+          <Route element={<ProtectedRoute />}>
+            <Route path="todos" element={<Todos />} />
+            <Route path="profile" element={<Profile />} />
+          </Route>
+        </Route>
+      </Routes>
+    </BrowserRouter>
+  );
 }
 
-export default App
+export default App;
