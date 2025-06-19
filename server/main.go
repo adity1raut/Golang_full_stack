@@ -27,7 +27,7 @@ func main() {
 
 	// CORS configuration
 	cors := gorillaHandlers.CORS(
-		gorillaHandlers.AllowedOrigins([]string{os.Getenv("ALLOWED_ORIGINS")}),
+		gorillaHandlers.AllowedOrigins([]string{"http://localhost:5173", "http://localhost:3000"}), // Adjust origins as needed
 		gorillaHandlers.AllowedMethods([]string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}),
 		gorillaHandlers.AllowedHeaders([]string{"Content-Type", "Authorization"}),
 		gorillaHandlers.AllowCredentials(),
@@ -59,7 +59,7 @@ func main() {
 
 	// Server configuration
 	server := &http.Server{
-		Addr:         ":" + os.Getenv("PORT"),
+		Addr:         ":" + "8000",
 		Handler:      cors(loggedRouter),
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
